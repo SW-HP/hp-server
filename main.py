@@ -12,13 +12,13 @@ nest_asyncio.apply()
 
 import sqlite3
 from routes.auth import auth_router
-from database import Base, engine
+from routes.assistant import assistant_router
+from routes.mesh_recovery import recovery_router
 from schemas import schemas
 from models import models
-from database import database
+from database import database, Base, engine
 from routes import auth
-from utils import token, password_utils
-
+from utils import token, password_utils, SQLInjectionProtectedRoute
 
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -42,6 +42,8 @@ app = FastAPI(
         "name": "MIT License",
         "url": "https://opensource.org/licenses/MIT",
     },
+    routes_class=SQLInjectionProtectedRoute
+
 )
 
 # CORS (Cross Origin Resource Sharing, 교차 출처 리소스 공유) 설정
@@ -58,29 +60,21 @@ app.add_middleware(
 
 # HTTPS 리다이렉트
 # app.add_middleware(HTTPSRedirectMiddleware)
-# 음.. 인증서랑 어떻게 해야할지 몰겠네요 좀 걸릴것같습니다.
-# 일단은 api완성부터하겠습니다.
 
 # 레이트 리미팅 설정
 # limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 # app.state.limiter = limiter
-# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # # DB 연결
 # Base.metadata.create_all(bind=engine)
 
-app.include_router(auth_router,prefix="/auth",tags=["authentications"])
+app.include_router(auth_router, prefix="/auth",tags=["authentications"])
+app.include_router(recovery_router, prefix="/recovery",tags=["BodyShapeEstimations"])
 # app.include_router(user.router, prefix="/users", tags=["Users"])
-# app.include_router(assistant.router, prefix="/assistant", tags=["Assistant"])
+app.include_router(assistant_router, prefix="/assistant", tags=["Assistant"])
 # app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 # app.include_router(reminders.router, prefix="/reminder", tags=["Reminder"])
 
-# @app.exception_handler(HTTPException)
-# async def custom_http_exception_handler(request, exc):
-#     return JSONResponse(
-#         status_code=exc.status_code,
-#         content={"detail": exc.detail}
-#     )
 
 # if __name__ == "__main__":
 #     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
