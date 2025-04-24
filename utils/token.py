@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt, ExpiredSignatureError
+from jose import JWTError, ExpiredSignatureError, jwt
 from database import get_db
 from models import User, RefreshToken
 from . import password_utils
@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import os
 
+load_dotenv()
 ## 토큰 생성 함수 ##
 class AuthHandler:
-    load_dotenv()
     def __init__(self, secret_key = os.getenv('your_Secret_Key'), 
                  algorithm = os.getenv('algorithm'),
                  access_token_expire_minutes = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES')),
