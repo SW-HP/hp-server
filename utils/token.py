@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
-from jose import JWTError, ExpiredSignatureError, jwt
+from jose import JWTError, ExpiredSignatureError, jwt # type: ignore
 from database import get_db
 from models import User, RefreshToken
 from . import password_utils
