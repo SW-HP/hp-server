@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from database import get_db, exception_handler
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from database import get_db
 from schemas import UserCreate, UserUpdate, UserResponse, TokenResponse, UserRegister, Login
 from datetime import timedelta, datetime
 from utils import auth_handler, get_password_hash, verify_password, get_current_user
-from pydantic import BaseModel, field_validator
-from sqlalchemy.exc import SQLAlchemyError
 from models import User, RefreshToken
+
 import uuid, re, os
 
 auth_router = APIRouter()
@@ -15,7 +17,6 @@ auth_router = APIRouter()
 ############################################################################################
 ######################################## 사용자 생성 ########################################
 ############################################################################################
-@exception_handler
 @auth_router.post('/user_register', response_model=UserRegister) # 출력 하는 모델
 def user_register(user: UserCreate, db: Session = Depends(get_db)): # 입력 받는 모델
     try:
@@ -82,7 +83,6 @@ def user_register(user: UserCreate, db: Session = Depends(get_db)): # 입력 받
 ####################################### 사용자 로그인 #######################################
 ############################################################################################
 
-@exception_handler
 @auth_router.post("/login", response_model=TokenResponse)
 def login(data: Login, db: Session = Depends(get_db)):
     user = None
@@ -118,7 +118,6 @@ def login(data: Login, db: Session = Depends(get_db)):
 ######################################## 토큰 재발급 ########################################
 ############################################################################################
 
-@exception_handler
 @auth_router.post("/refresh")
 def refresh(access_token: str = Header(None), refresh_token: str = Header(None), db: Session = Depends(get_db)):
     if not access_token or not refresh_token:
@@ -153,7 +152,6 @@ def refresh(access_token: str = Header(None), refresh_token: str = Header(None),
 ###################################### 사용자 로그아웃 ######################################
 ############################################################################################
 
-@exception_handler
 @auth_router.post("/logout")
 def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     refresh_token = db.query(RefreshToken).filter(RefreshToken.user_id == user.user_id).first()
