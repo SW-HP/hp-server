@@ -7,5 +7,6 @@ from .schemas import (
     UserBioUpdate, 
     UserBioOut, 
     TokenResponse,
-    Login
+    Login,
+    BodyMeasurementRecordSchema
 )

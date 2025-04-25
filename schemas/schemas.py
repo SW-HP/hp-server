@@ -9,7 +9,6 @@ class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="이메일")
     user_password: str = Field(..., min_length=8, description="최소 8자, 하나의 문자, 숫자, 특수문자 포함")
     phone_number: str = Field(..., description="휴대폰 번호")
-    user_birth: datetime = Field(..., description="생년월일")
     
     class Config:
         from_attributes = True
@@ -37,12 +36,6 @@ class UserCreate(BaseModel):
         phone_regex = r"^010-\d{4}-\d{4}$"
         if not re.fullmatch(phone_regex, v):
             raise ValueError("휴대폰 번호는 010-xxxx-xxxx 형식이어야 합니다.")
-        return v
-    
-    @field_validator('user_birth')
-    def validate_birth(cls, v):
-        if v >= datetime.now():
-            raise ValueError('생년월일은 현재 날짜 이전이어야 합니다.')
         return v
 
 
@@ -95,9 +88,9 @@ class Login(BaseModel):
         if re.fullmatch(email_regex, v):
             return {"type": "email", "value": v}
         
-        phone_regex = r"^010-?\d{4}-?\d{4}$"
+        phone_regex = r"^010-?\d{4}-?\d{4}$" # 전화번호 로그인 사용불가함
         if re.fullmatch(phone_regex, v):
-            normalized_phone = v.replace("-", "") 
+            normalized_phone = v.replace("-", "")
             return {"type": "phone_number", "value": normalized_phone}  
 
         # 형식이 잘못된 경우 예외 발생
@@ -114,3 +107,24 @@ class UserBioOut(UserBioBase):
     body_fat_percentage: float
     body_muscle_mass: float
     body_bone_density: float
+
+class BodyMeasurementRecordSchema(BaseModel):
+    user_id: int
+    left_arm_length: float
+    right_arm_length: float
+    inside_leg_height: float
+    shoulder_to_crotch_height: float
+    shoulder_breadth: float
+    head_circumference: float
+    chest_circumference: float
+    waist_circumference: float
+    hip_circumference: float
+    wrist_right_circumference: float
+    bicep_right_circumference: float
+    forearm_right_circumference: float
+    thigh_left_circumference: float
+    calf_left_circumference: float
+    ankle_left_circumference: float
+
+    class Config:
+        from_attributes = True

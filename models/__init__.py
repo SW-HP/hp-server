@@ -3,5 +3,6 @@ from .models import (
     RefreshToken, 
     AssistantThread, 
     AssistantMessage,
-    AssistantMessageCreate
+    AssistantMessageCreate,
+    BodyMeasurementRecord
 )
