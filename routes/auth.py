@@ -14,6 +14,22 @@ import uuid, re, os
 
 auth_router = APIRouter()
 
+
+
+# test 아이디 비번 출력
+@auth_router.get("/test")
+def test(user_id: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다")
+    
+    return {
+        "user_name": user.user_name,
+        "user_password": user.user_password,
+        "phone_number": user.phone_number,
+        "email": user.email
+    }
+
 ############################################################################################
 ######################################## 사용자 생성 ########################################
 ############################################################################################
@@ -24,16 +40,22 @@ def user_register(user: UserCreate, db: Session = Depends(get_db)): # 입력 받
         if user.email:
             existing_user = db.query(User).filter(User.email == user.email).first()
             if existing_user:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 등록된 이메일입니다")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="이미 등록된 이메일입니다")
         
         # 전화번호 입력 검증
         if user.phone_number:
             existing_user = db.query(User).filter(User.phone_number == user.phone_number).first()
             if existing_user:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="전화번호가 이미 등록되어 있습니다")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="전화번호가 이미 등록되어 있습니다")
         
         if not user.email and not user.phone_number:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 혹은 전화번호를 입력해주세요")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="이메일 혹은 전화번호를 입력해주세요")
 
         hashed_password = get_password_hash(user.user_password)
 
@@ -120,16 +142,14 @@ def login(data: Login, db: Session = Depends(get_db)):
 
 @auth_router.post("/refresh")
 def refresh(access_token: str = Header(None), refresh_token: str = Header(None), db: Session = Depends(get_db)):
+    
     if not access_token or not refresh_token:
         raise HTTPException(status_code=400, detail="토큰이 누락되었습니다")
 
-    try:
-        access_payload = auth_handler.decode_token(access_token, refresh=True)
-        user_id = access_payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="토근이 유효하지 않습니다")
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="토근이 유효하지 않습니다")
+    access_payload = auth_handler.decode_token(access_token, refresh=True, db=db)
+    user_id = access_payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="토큰이 유효하지 않습니다")
 
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
@@ -138,7 +158,7 @@ def refresh(access_token: str = Header(None), refresh_token: str = Header(None),
     valid_refresh_token = auth_handler.get_refreshtoken(db, refresh_token)
     
     if valid_refresh_token.user_id != user.user_id:
-        raise HTTPException(status_code=401, detail="토근이 유효하지 않습니다")
+        raise HTTPException(status_code=401, detail="토큰이 유효하지 않습니다")
 
     new_access_token =auth_handler.create_access_token(user.user_id)
     new_refresh_token = auth_handler.create_refresh_token(user.user_id)

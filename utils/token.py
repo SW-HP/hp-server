@@ -31,14 +31,14 @@ class AuthHandler:
         return jwt.encode(encode_payload, self.secret_key, algorithm=self.algorithm)
     
     ## 토큰 디코딩 ##
-    def decode_token(self, token: str, refresh: bool = False,db: Session = Depends(get_db)) -> dict:
+    def decode_token(self, token: str, db: Session, refresh: bool = False) -> dict:
         try:
             decode_payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return decode_payload
         except ExpiredSignatureError:
             if refresh:
                 decode_payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], options={'verify_exp': False})
-                self.update_last_used_at(db, token)
+                # self.update_last_used_at(db, token)
                 return decode_payload
             else:
                 raise HTTPException(status_code=401, detail="토큰이 만료되었습니다")
@@ -55,16 +55,19 @@ class AuthHandler:
     
     ## 리프레시 토큰 마지막 사용 시간 업데이트 ##
     def update_last_used_at(self, db: Session, token: str):
-
-        refresh_token = db.query(RefreshToken).filter(RefreshToken.token == token).first()
-    
-        if refresh_token:
-            refresh_token.last_used_at = datetime.utcnow()
-            db.commit()
-            return refresh_token
-        else:
-            raise HTTPException(status_code=404, detail="리프레시 토큰을 찾을 수 없습니다")
-    
+        try:
+            print(f"Updating last used at for token: {token}")
+            refresh_token = db.query(RefreshToken).filter(RefreshToken.token == token).first()
+        
+            if refresh_token:
+                refresh_token.last_used_at = datetime.utcnow()
+                db.commit()
+                return refresh_token
+            else:
+                raise HTTPException(status_code=404, detail="리프레시 토큰을 찾을 수 없습니다")
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"DB 업데이트 중 오류 발생: {str(e)}")
     ## 토큰 DB저장 ##
     def save_token(self, db: Session, user_id: int, token: str, expires_at: datetime = None):
         if expires_at is None:
@@ -109,7 +112,7 @@ def get_current_user(bearer_token: str = Depends(authorization), db: Session = D
     token = bearer_token.split(" ")[1]
 
     try:
-        payload = auth_handler.decode_token(token)
+        payload = auth_handler.decode_token(token, db=db)
         if not payload:
             raise HTTPException(status_code=401, detail="토큰이 유효하지 않습니다")
         user_id = payload.get("sub")
@@ -128,13 +131,3 @@ def get_current_user(bearer_token: str = Depends(authorization), db: Session = D
     
     except Exception as e:
         raise HTTPException(status_code=403, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
-
-## 사용자 마지막 로그인 시간 업데이트 ##
-def update_last_login(db: Session, user_id: int):
-    user = db.query(User).filter(User.user_id == user_id).first()
-    if user:
-        user.last_login = datetime.utcnow()
-        db.commit()
-        return user
-    else:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
