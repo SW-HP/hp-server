@@ -24,6 +24,10 @@ class User(Base):
     assistant_threads: Mapped[List["AssistantThread"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     body_measurements_record: Mapped[List["BodyMeasurementRecord"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
+    training_programs: Mapped[List["TrainingProgram"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
 class UserBodyProfile(Base):
     __tablename__ = "user_body_profile"
 
@@ -80,7 +84,8 @@ class AssistantMessage(Base):
 class BodyMeasurementRecord(Base):
     __tablename__ = "body_measurements_record"
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  # 추가
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), nullable=False)
     recoded_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     left_arm_length: Mapped[float] = mapped_column(Float, nullable=False)
     right_arm_length: Mapped[float] = mapped_column(Float, nullable=False)
@@ -105,3 +110,55 @@ class AssistantMessageCreate(BaseModel):
     content: str
     class Config:
         from_attributes = True
+
+class TrainingProgram(Base):
+    __tablename__ = "training_programs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), nullable=False)
+    training_cycle_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    goals: Mapped[str] = mapped_column(String(500), nullable=False)
+    constraints: Mapped[str] = mapped_column(String(500), nullable=False)
+    notes: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="training_programs")
+    cycles: Mapped[List["TrainingCycle"]] = relationship(back_populates="program", cascade="all, delete-orphan")
+    exercise_sets: Mapped[List["ExerciseSet"]] = relationship(back_populates="program", cascade="all, delete-orphan")
+
+class TrainingCycle(Base):
+    __tablename__ = "training_cycles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id"), nullable=False)
+    day_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    exercise_type: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    program: Mapped["TrainingProgram"] = relationship(back_populates="cycles")
+
+class ExerciseSet(Base):
+    __tablename__ = "exercise_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id"), nullable=False)
+    set_key: Mapped[int] = mapped_column(Integer, nullable=False)
+    focus_area: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    program: Mapped["TrainingProgram"] = relationship(back_populates="exercise_sets")
+    details: Mapped[List["ExerciseDetail"]] = relationship(back_populates="exercise_set", cascade="all, delete-orphan")
+
+class ExerciseDetail(Base):
+    __tablename__ = "exercise_details"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    set_id: Mapped[int] = mapped_column(Integer, ForeignKey("exercise_sets.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sets: Mapped[int] = mapped_column(Integer, nullable=False)
+    reps: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    unit: Mapped[str] = mapped_column(String(50), nullable=False)
+    weight_type: Mapped[str] = mapped_column(String(50), nullable=True)
+    weight_value: Mapped[float] = mapped_column(Float, nullable=True)
+    rest: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    exercise_set: Mapped["ExerciseSet"] = relationship(back_populates="details")
