@@ -93,16 +93,15 @@ async def process_image(file: UploadFile = File(...), _fov: int = 60, user: User
         raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
     
 # get
-@recovery_router.get('/body_measurement_record/{user_id}', response_model=BodyMeasurementRecordSchema)
-def get_body_measurement_record(user_id: int, db: Session = Depends(get_db)):
+@recovery_router.get('/body_measurement_record', response_model=BodyMeasurementRecordSchema)
+def get_body_measurement_record(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         # 사용자 존재 여부 확인
-        user = db.query(User).filter(User.user_id == user_id).first()
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
         
         # 신체 측정 기록 조회
-        record = db.query(BodyMeasurementRecord).filter(BodyMeasurementRecord.user_id == user_id).first()
+        record = db.query(BodyMeasurementRecord).filter(BodyMeasurementRecord.user_id == user.user_id).first()
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="신체 측정 기록을 찾을 수 없습니다.")
         
