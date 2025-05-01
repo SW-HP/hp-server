@@ -16,6 +16,7 @@ class User(Base):
     user_password : Mapped[str] = mapped_column(String(255), nullable=False)
     phone_number : Mapped[str] = mapped_column(String(15), nullable=False)
     email : Mapped[str] = mapped_column(String(100), nullable=False)
+    goals: Mapped[str] = mapped_column(String(1000), nullable=True)
     created_at : Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     last_login : Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
@@ -117,7 +118,6 @@ class TrainingProgram(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), nullable=False)
     training_cycle_length: Mapped[int] = mapped_column(Integer, nullable=False)
-    goals: Mapped[str] = mapped_column(String(500), nullable=False)
     constraints: Mapped[str] = mapped_column(String(500), nullable=False)
     notes: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
