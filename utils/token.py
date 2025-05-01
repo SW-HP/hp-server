@@ -12,7 +12,7 @@ import os
 load_dotenv()
 ## 토큰 생성 함수 ##
 class AuthHandler:
-    def __init__(self, secret_key = os.getenv('your_Secret_Key'), 
+    def __init__(self, secret_key = os.getenv('SECRET_KEY'), 
                  algorithm = os.getenv('algorithm'),
                  access_token_expire_minutes = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES')),
                  refresh_token_expire_days = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS'))):
