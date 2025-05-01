@@ -2,14 +2,14 @@ from fastapi import APIRouter, HTTPException, UploadFile, status, File, Depends,
 from fastapi.responses import JSONResponse
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import requests
 import os
 
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from models import User, BodyMeasurementRecord
+from models import User, BodyMeasurementRecord, AssistantThread, TrainingProgram
 from schemas import BodyMeasurementRecordSchema
 from utils import get_current_user
 from database import get_db
@@ -100,7 +100,7 @@ def get_body_measurement_record(user: User = Depends(get_current_user), db: Sess
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
         
-        # 신체 측정 기록 조회
+        # 최근 신체 측정 기록 조회
         record = db.query(BodyMeasurementRecord).filter(BodyMeasurementRecord.user_id == user.user_id).first()
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="신체 측정 기록을 찾을 수 없습니다.")

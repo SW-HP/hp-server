@@ -4,5 +4,10 @@ from .models import (
     AssistantThread, 
     AssistantMessage,
     AssistantMessageCreate,
-    BodyMeasurementRecord
+    BodyMeasurementRecord,
+    TrainingProgram,
+    UserBodyProfile,
+    TrainingCycle,
+    ExerciseSet,
+    ExerciseDetail
 )
