@@ -85,7 +85,7 @@ class AssistantMessage(Base):
 class BodyMeasurementRecord(Base):
     __tablename__ = "body_measurements_record"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  # 추가
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), nullable=False)
     recoded_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     left_arm_length: Mapped[float] = mapped_column(Float, nullable=False)
@@ -135,16 +135,20 @@ class TrainingCycle(Base):
     exercise_type: Mapped[int] = mapped_column(Integer, nullable=False)
 
     program: Mapped["TrainingProgram"] = relationship(back_populates="cycles")
+    exercise_sets: Mapped[List["ExerciseSet"]] = relationship(back_populates="cycle", cascade="all, delete-orphan")
+
 
 class ExerciseSet(Base):
     __tablename__ = "exercise_sets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id"), nullable=False)
+    cycle_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_cycles.id"), nullable=False)
     set_key: Mapped[int] = mapped_column(Integer, nullable=False)
     focus_area: Mapped[str] = mapped_column(String(255), nullable=False)
 
     program: Mapped["TrainingProgram"] = relationship(back_populates="exercise_sets")
+    cycle: Mapped["TrainingCycle"] = relationship(back_populates="exercise_sets")
     details: Mapped[List["ExerciseDetail"]] = relationship(back_populates="exercise_set", cascade="all, delete-orphan")
 
 class ExerciseDetail(Base):
