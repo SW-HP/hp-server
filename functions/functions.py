@@ -79,7 +79,6 @@ def get_user_train_program(db: Session, thread_id: str, id: str=None):
             training_data.append({
                 "program_id": program.id,
                 "training_cycle_length": program.training_cycle_length,
-                "goals": program.goals,  # JSON 형태면 json.loads 필요
                 "constraints": program.constraints,
                 "notes": program.notes,
                 "cycles": cycles,
@@ -107,43 +106,45 @@ def save_user_train_program(db: Session, thread_id: str, training_data: dict):
     """
     try:
         # 기존 프로그램 삭제
+    # 기존 프로그램 삭제
         user = db.query(User).join(AssistantThread).filter(AssistantThread.thread_id == thread_id).first()
         db.query(TrainingProgram).filter(TrainingProgram.user_id == user.user_id).delete()
         db.commit()
-        # JSON to DB 저장
-        for program in training_data:
-            new_program = TrainingProgram(
-                user_id=user.user_id,
-                training_cycle_length=program["training_cycle_length"],
-                goals=program["goals"],
-                constraints=program["constraints"],
-                notes=program["notes"]
+
+        # training_data는 dict이므로 반복문 필요 없음
+        program = training_data
+
+        new_program = TrainingProgram(
+            user_id=user.user_id,
+            training_cycle_length=program["training_cycle_length"],
+            constraints=program["constraints"],  # 이게 JSONField 혹은 문자열이어야 함
+            notes=program["notes"]
+        )
+        db.add(new_program)
+        db.commit()
+        db.refresh(new_program)
+
+        for cycle in program["cycles"]:
+            new_cycle = TrainingCycle(
+                program_id=new_program.id,
+                day_index=cycle["day_index"],
+                exercise_type=cycle["exercise_type"]
             )
-            db.add(new_program)
+            db.add(new_cycle)
             db.commit()
-            db.refresh(new_program)
+            db.refresh(new_cycle)
 
-            for cycle in program["cycles"]:
-                new_cycle = TrainingCycle(
-                    program_id=new_program.id,
-                    day_index=cycle["day_index"],
-                    exercise_type=cycle["exercise_type"]
-                )
-                db.add(new_cycle)
-                db.commit()
-                db.refresh(new_cycle)
-
-            for ex_set in program["exercise_sets"]:
+            for ex_set in cycle["sets"]:
                 new_ex_set = ExerciseSet(
                     program_id=new_program.id,
-                    set_key=ex_set["set_key"],
+                    cycle_id=new_cycle.id,
                     focus_area=ex_set["focus_area"]
                 )
                 db.add(new_ex_set)
                 db.commit()
                 db.refresh(new_ex_set)
 
-                for detail in ex_set["details"]:
+                for detail in ex_set["exercises"]:
                     new_detail = ExerciseDetail(
                         set_id=new_ex_set.id,
                         name=detail["name"],
@@ -157,8 +158,9 @@ def save_user_train_program(db: Session, thread_id: str, training_data: dict):
                     db.add(new_detail)
                     db.commit()
                     db.refresh(new_detail)
-            # db.commit()
+
         return {"status": "success", "message": "운동 프로그램이 성공적으로 저장되었습니다."}
+
     except SQLAlchemyError as e:
         db.rollback()
         return {"status": "failed", "message": f"데이터베이스 오류가 발생했습니다: {str(e)}"}

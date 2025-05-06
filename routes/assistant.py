@@ -1,20 +1,22 @@
-import os
+import json, os
+import traceback
 
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import desc
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from openai import OpenAIError
 
-from models import  AssistantMessageCreate, AssistantThread, AssistantMessage, User
+from models import  AssistantMessageCreate, AssistantThread, AssistantMessage, User, TrainingProgram, TrainingCycle, ExerciseDetail, ExerciseSet
 from database import get_db
 from assistant import client, AssistantHandler, ExerciseDesignerHandler, __INSTRUCTIONS__, __EXERCISE_DESIGNER_INSTRUCTIONS__
 from utils import get_current_user
 
 assistant_router = APIRouter()
 
-assistant_id = os.getenv("assistant_id")
-assistant_exercise_designer_id = os.getenv("assistant_exercise_designer_id")
+assistant_id = os.getenv("ASSISTANT_ID")
+assistant_exercise_designer_id = os.getenv("ASSISTANT_EXERCISE_DESIGNER_ID")
 
 
 ### 스레드 관리 API ###
@@ -144,12 +146,18 @@ async def get_latest_message(user: User = Depends(get_current_user), db: Session
     
     return latest_message
 
+# Test용
 @assistant_router.post("/temp_message_run")
 async def temp_message_run(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
+        # 함수 시간 측정 시작
+        start_time = datetime.now()
+        elapsed_times = {}
+
         # 임시 쓰레드 생성
         thread = client.beta.threads.create()
         thread_id = db.query(AssistantThread).filter(AssistantThread.user_id == user.user_id).first().thread_id
+
         # 메시지 실행
         response = client.beta.threads.messages.create(
             thread_id=thread.id,
@@ -163,22 +171,80 @@ async def temp_message_run(user: User = Depends(get_current_user), db: Session =
             thread_id=thread.id,
             assistant_id=assistant_exercise_designer_id,
             instructions=__EXERCISE_DESIGNER_INSTRUCTIONS__,
-            event_handler=ExerciseDesignerHandler(db, thread.thread_id),
+            event_handler=ExerciseDesignerHandler(db, thread.id),
         ) as stream:
-            for text_delta in stream.text_deltas:
-                print(f"Delta: {text_delta}")
+            stream.until_done()
 
-        # 최종 메시지 결과 반환
-        print(dir(stream))
-        try:
-            print(f'stream.content[0]: {stream.content[0]}')
-        except Exception as e:
-            print(f'stream.latest_message.content[0]: {stream.latest_message.content[0]}') 
-        print(f'stream.content[0].text.value: {stream.content[0].text.value}')
+        elapsed_times["step_2"] = (datetime.now() - start_time).total_seconds() * 1000
 
-        return {"status": "Message executed", "content": stream.content[0].text.value}
+        # 스트림에서 최종 메시지 가져오기
+        program = json.loads(stream.get_final_messages()[0].content[0].text.value)
+        elapsed_times["step_3"] = (datetime.now() - start_time).total_seconds() * 1000
 
+        new_program = TrainingProgram(
+            user_id=user.user_id,
+            training_cycle_length=program["training_cycle_length"],
+            constraints=json.dumps(program["constraints"], ensure_ascii=False),
+            notes=program["notes"]
+        )
+        db.add(new_program)
+        db.commit()
+        db.refresh(new_program)
+
+        for cycle in program["cycles"]:
+            new_cycle = TrainingCycle(
+                program_id=new_program.id,
+                day_index=cycle["day_index"],
+                exercise_type=cycle["exercise_type"]
+            )
+            db.add(new_cycle)
+            db.commit()
+            db.refresh(new_cycle)
+
+            for ex_set in cycle["sets"]:
+                new_ex_set = ExerciseSet(
+                    program_id=new_program.id,
+                    cycle_id=new_cycle.id,
+                    focus_area=ex_set["focus_area"]
+                )
+                db.add(new_ex_set)
+                db.commit()
+                db.refresh(new_ex_set)
+
+                for detail in ex_set["exercises"]:
+                    new_detail = ExerciseDetail(
+                        set_id=new_ex_set.id,
+                        name=detail["name"],
+                        sets=detail["sets"],
+                        reps=detail["reps"],
+                        unit=detail["unit"],
+                        weight_type=detail.get("weight_type"),
+                        weight_value=detail.get("weight_value"),
+                        rest=detail["rest"]
+                    )
+                    db.add(new_detail)
+                    db.commit()
+                    db.refresh(new_detail)
+
+        elapsed_times["step_4"] = (datetime.now() - start_time).total_seconds() * 1000
+
+        # 해당 Assistant는 메인 Assistant의 Function으로 작동하므로 FunctionCall 형태로 반환
+        elapsed_times["total"] = (datetime.now() - start_time).total_seconds() * 1000
+        return {
+            "status": "Message executed",
+            "content": json.dumps(json.loads(stream.get_final_messages()[0].content[0].text.value), indent=2, ensure_ascii=False),
+            "elapsed_times": elapsed_times
+        }
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        return {"status": "failed", "message": f"데이터베이스 오류가 발생했습니다: {str(e)}"}
     except OpenAIError as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI API 오류: {str(e)}")
+        return {"status": "failed", "message": f"OpenAI API 오류가 발생했습니다: {str(e)}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+        return {
+            "status": "failed", 
+            "message": f"예상치 못한 오류가 발생했습니다.",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+            }

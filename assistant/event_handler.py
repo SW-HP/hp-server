@@ -175,14 +175,3 @@ class ExerciseDesignerHandler(AssistantEventHandler):
                     print(f'\tdelta: {text}')
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"메세지 델타 처리 실패: {str(e)}")
-
-    @override
-    def on_message_done(self, content: Message) -> None:
-        try:
-            print(f"\t→")
-            print(f'\t→content: {content}')
-            print(f'\t→content: {content.content[0].text.value}')
-            print(f"\t→")
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"메세지 종료 처리 실패: {str(e)}")
