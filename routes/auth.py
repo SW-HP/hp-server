@@ -16,20 +16,6 @@ auth_router = APIRouter()
 
 
 
-# test 아이디 비번 출력
-@auth_router.get("/test")
-def test(user_id: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.user_id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다")
-    
-    return {
-        "user_name": user.user_name,
-        "user_password": user.user_password,
-        "phone_number": user.phone_number,
-        "email": user.email
-    }
-
 ############################################################################################
 ######################################## 사용자 생성 ########################################
 ############################################################################################
@@ -182,3 +168,51 @@ def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)
     auth_handler.delete_token(db, refresh_token.token)
 
     return JSONResponse(content={"message": "로그아웃 되었습니다"})
+
+
+#test get user
+@auth_router.get("/user")
+def get_user(user: User = Depends(get_current_user)):
+    return {
+        "user_id": user.user_id,
+        "user_name": user.user_name,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "created_at": user.created_at
+    }
+
+#test set user name
+@auth_router.put("/user")
+def set_user(user: User = Depends(get_current_user), user_update: UserUpdate = Depends(), db: Session = Depends(get_db)):
+    if user_update.user_name:
+        user.user_name = user_update.user_name
+    if user_update.phone_number:
+        user.phone_number = user_update.phone_number
+    if user_update.email:
+        user.email = user_update.email
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "user_id": user.user_id,
+        "user_name": user.user_name,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "created_at": user.created_at
+    }
+
+#set user goal
+@auth_router.put("/user/goal")
+def set_user_goal(new_goal: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not new_goal:
+        raise HTTPException(status_code=400, detail="목표를 입력해주세요")
+    
+    user.goals = new_goal
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "user_name": user.user_name,
+        "goal": user.goals
+        }

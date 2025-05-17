@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from openai import AssistantEventHandler, OpenAI
 from openai.types.beta.threads import Message
 
-from functions import get_user_train_program, save_user_train_program
+from functions import get_user_train_program, get_body_measurement_records, generate_user_train_program
 from models import AssistantThread, AssistantMessage
 from assistant import __INSTRUCTIONS__, __EXERCISE_DESIGNER_INSTRUCTIONS__
 
@@ -47,6 +47,7 @@ class AssistantHandler(AssistantEventHandler):
                 raise HTTPException(status_code=404, detail="메세지가 존재하지 않습니다.")
         except SQLAlchemyError:
             self.db.rollback()
+
     def on_event(self, event: Any) -> None:
         self.update_message_status(event.event)
         if event.event == 'thread.run.requires_action':
@@ -83,6 +84,8 @@ class AssistantHandler(AssistantEventHandler):
 
             if tool.function.name == "get_user_train_program":
                 result = get_user_train_program(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
+            elif tool.function.name == "generate_user_train_program":
+                result = generate_user_train_program(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
 
 
             if isinstance(result, dict):
@@ -136,11 +139,24 @@ class ExerciseDesignerHandler(AssistantEventHandler):
         super().__init__()
         self.db = db
         self.thread_id = thread_id
-        
+    
+    
+    def on_event(self, event: Any) -> None:
+        if event.event == 'thread.run.requires_action':
+            run_id = event.data.id
+            self.handle_requires_action(event.data, run_id)
+        elif event.event == 'thread.run.cancelled':
+            raise HTTPException(status_code=400, detail="쓰레드가 취소되었습니다.")
+        else:
+            pass
     @override
     def on_tool_call_created(self, tool_call):
         self.function_name = tool_call.function.name
         self.tool_id = tool_call.id
+    
+    @override
+    def on_text_delta(self, delta, snapshot):
+        print(f"{delta.value}")
 
     @override
     def handle_requires_action(self, data, run_id):
@@ -149,11 +165,10 @@ class ExerciseDesignerHandler(AssistantEventHandler):
         for tool in data.required_action.submit_tool_outputs.tool_calls:
             tool_arguments = json.loads(tool.function.arguments) if tool.function.arguments else {}
 
-            if tool.function.name == "save_user_train_program":
-                result = save_user_train_program(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
-            elif tool.function.name == "get_user_train_program":
-                result = get_user_train_program(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
-
+            # if tool.function.name == "get_body_measurement_records":
+            #     result = get_body_measurement_records(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
+            # elif tool.function.name == "get_user_train_program":
+            #     result = get_user_train_program(db=self.db, thread_id=self.current_run.thread_id, **tool_arguments)
 
             if isinstance(result, dict):
                 result = json.dumps(result, ensure_ascii=False)
@@ -168,10 +183,11 @@ class ExerciseDesignerHandler(AssistantEventHandler):
             thread_id=self.current_run.thread_id,
             run_id=self.current_run.id,
             tool_outputs=tool_outputs,
-            event_handler=ExerciseDesignerHandler(self.db, self.thread_id),
+            event_handler=ExerciseDesignerHandler(self.db, self.current_run.thread_id),
         ) as stream:
-            try:
-                for text in stream.text_deltas:
-                    print(f'\tdelta: {text}')
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"메세지 델타 처리 실패: {str(e)}")
+            for _ in stream:
+                pass
+
+    @override
+    def on_message_done(self, content: Message) -> None:
+        print(f"on_message_done: {content.content[0].text.value}")

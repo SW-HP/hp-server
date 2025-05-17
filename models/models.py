@@ -1,12 +1,12 @@
-from sqlalchemy import Integer, String, Boolean, ForeignKey, DateTime, Float, CHAR, Enum
+from sqlalchemy import Integer, String, Boolean, ForeignKey, DateTime, Float, CHAR, Enum, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
 from pydantic import BaseModel
 from database import Base
-from typing import List
-import datetime
+from typing import List, Union
+import datetime, enum
 
 class User(Base):
     __tablename__ = "users"
@@ -28,23 +28,24 @@ class User(Base):
     training_programs: Mapped[List["TrainingProgram"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+class GenderEnum(enum.Enum):
+    male = "male"
+    female = "female"
 
 class UserBodyProfile(Base):
     __tablename__ = "user_body_profile"
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), primary_key=True)
-    user_age: Mapped[int] = mapped_column(Integer, nullable=False)
-    gender: Mapped[str] = mapped_column(String(10), nullable=False)
-    height: Mapped[float] = mapped_column(Float, nullable=False)
-    weight: Mapped[float] = mapped_column(Float, nullable=False)
-    neck_circumference: Mapped[float] = mapped_column(Float, nullable=False)
-    body_fat_percentage: Mapped[float] = mapped_column(Float, nullable=False)
-    body_muscle_mass: Mapped[float] = mapped_column(Float, nullable=False)
-    body_bone_density: Mapped[float] = mapped_column(Float, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), primary_key=True)
+    user_age: Mapped[Union[int, None]] = mapped_column(Integer, nullable=True)
+    gender: Mapped[Union[GenderEnum, None]] = mapped_column(Enum(GenderEnum), nullable=True)
+    height: Mapped[Union[float, None]] = mapped_column(Float, nullable=True)
+    weight: Mapped[Union[float, None]] = mapped_column(Float, nullable=True)
+    body_fat_percentage: Mapped[Union[float, None]] = mapped_column(Float, nullable=True)
+    body_muscle_mass: Mapped[Union[float, None]] = mapped_column(Float, nullable=True)
+    injuries: Mapped[Union[str, None]] = mapped_column(Text, nullable=True)
+    equipment: Mapped[Union[str, None]] = mapped_column(Text, nullable=True)
 
-
-    user: Mapped["User"] = relationship(back_populates="user_body_profile")
-
+    user: Mapped["User"] = relationship("User", back_populates="user_body_profile")
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
@@ -88,6 +89,7 @@ class BodyMeasurementRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"), nullable=False)
     recoded_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+    height: Mapped[float] = mapped_column(Float, nullable=False)
     left_arm_length: Mapped[float] = mapped_column(Float, nullable=False)
     right_arm_length: Mapped[float] = mapped_column(Float, nullable=False)
     inside_leg_height: Mapped[float] = mapped_column(Float, nullable=False)
@@ -144,7 +146,6 @@ class ExerciseSet(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id"), nullable=False)
     cycle_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_cycles.id"), nullable=False)
-    set_key: Mapped[int] = mapped_column(Integer, nullable=False)
     focus_area: Mapped[str] = mapped_column(String(255), nullable=False)
 
     program: Mapped["TrainingProgram"] = relationship(back_populates="exercise_sets")

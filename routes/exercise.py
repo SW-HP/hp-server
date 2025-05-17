@@ -5,15 +5,171 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from dotenv import load_dotenv
-from models import User
+from models import User, UserBodyProfile
 from utils import get_current_user
 from database import get_db
 load_dotenv()
 
 
 exercise_router = APIRouter()
+# class UserBodyProfile(Base):
+#     __tablename__ = "user_body_profile"
 
-# 운동 프로그램 가져오기
+#     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), primary_key=True)
+#     user_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+#     gender: Mapped[GenderEnum | None] = mapped_column(Enum(GenderEnum), nullable=True)
+#     height: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     body_fat_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     body_muscle_mass: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     injuries: Mapped[str | None] = mapped_column(Text, nullable=True)
+#     equipment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+# injuries 저장
+@exercise_router.post('/injuries')
+def save_injuries(injuries: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 사용자의 body_profile이 존재하지 않으면 생성
+        if not user.user_body_profile:
+            user.user_body_profile = UserBodyProfile(user_id=user.user_id)
+
+        # injuries 저장
+        user.user_body_profile.injuries = injuries
+        db.commit()
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "부상 정보가 성공적으로 저장되었습니다."}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
+# equipment 저장
+@exercise_router.post('/equipment')
+def save_equipment(equipment: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 사용자의 body_profile이 존재하지 않으면 생성
+        if not user.user_body_profile:
+            user.user_body_profile = UserBodyProfile(user_id=user.user_id)
+
+        # equipment 저장
+        user.user_body_profile.equipment = equipment
+        db.commit()
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "장비 정보가 성공적으로 저장되었습니다."}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
+# user.goals 저장
+@exercise_router.post('/goals')
+def save_goals(goals: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # goals 저장
+        user.goals = goals
+        db.commit()
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "목표 정보가 성공적으로 저장되었습니다."}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
+# injuries get
+@exercise_router.get('/injuries')
+def get_injuries(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 사용자의 body_profile이 존재하지 않으면 생성
+        if not user.user_body_profile:
+            user.user_body_profile = UserBodyProfile(user_id=user.user_id)
+
+        # injuries 가져오기
+        injuries = user.user_body_profile.injuries
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"injuries": injuries}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
+# equipment get
+@exercise_router.get('/equipment')
+def get_equipment(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 사용자의 body_profile이 존재하지 않으면 생성
+        if not user.user_body_profile:
+            user.user_body_profile = UserBodyProfile(user_id=user.user_id)
+
+        # equipment 가져오기
+        equipment = user.user_body_profile.equipment
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"equipment": equipment}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
+# goals get
+@exercise_router.get('/goals')
+def get_goals(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # goals 가져오기
+        goals = user.goals
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"goals": goals}
+        )
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
+    
+
 @exercise_router.get('/get_training_program')
 def get_user_train_programs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:

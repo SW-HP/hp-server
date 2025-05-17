@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from openai import OpenAIError
 
-from models import  AssistantMessageCreate, AssistantThread, AssistantMessage, User, TrainingProgram, TrainingCycle, ExerciseDetail, ExerciseSet
+from models import  AssistantMessageCreate, AssistantThread, AssistantMessage, User, TrainingProgram, TrainingCycle, ExerciseDetail, ExerciseSet, BodyMeasurementRecord
 from database import get_db
 from assistant import client, AssistantHandler, ExerciseDesignerHandler, __INSTRUCTIONS__, __EXERCISE_DESIGNER_INSTRUCTIONS__
 from utils import get_current_user
@@ -16,7 +16,7 @@ from utils import get_current_user
 assistant_router = APIRouter()
 
 assistant_id = os.getenv("ASSISTANT_ID")
-assistant_exercise_designer_id = os.getenv("ASSISTANT_EXERCISE_DESIGNER_ID")
+assistant_exercise_designer_id = os.getenv("ASSISTANT_EXERCISE_DESIGNER_ID") # 임시
 
 
 ### 스레드 관리 API ###
@@ -60,7 +60,19 @@ async def delete_assistant_thread(user: User = Depends(get_current_user), db: Se
     thread = db.query(AssistantThread).filter(AssistantThread.user_id == user.user_id).first()
     if not thread:
         raise HTTPException(status_code=404, detail="쓰레드를 찾을 수 없습니다.")
-    client.beta.threads.delete(thread.thread_id)
+
+    # OpenAI Thread 삭제 시도
+    try:
+        client.beta.threads.delete(thread.thread_id)
+    except OpenAIError as e:
+        # 404 오류인 경우 무시하고 DB만 삭제
+        if "No thread found with id" in str(e):
+            pass
+        else:
+            # 그 외 오류는 그대로 리턴
+            raise HTTPException(status_code=500, detail="쓰레드 삭제 중 오류가 발생했습니다." + str(e) + str(thread.thread_id))
+
+    # DB 기록 삭제
     db.delete(thread)
     db.commit()
     return {"message": "쓰레드를 삭제했습니다."}
@@ -146,24 +158,50 @@ async def get_latest_message(user: User = Depends(get_current_user), db: Session
     
     return latest_message
 
-# Test용
+# # Test용
 @assistant_router.post("/temp_message_run")
 async def temp_message_run(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        # 함수 시간 측정 시작
-        start_time = datetime.now()
-        elapsed_times = {}
-
         # 임시 쓰레드 생성
         thread = client.beta.threads.create()
         thread_id = db.query(AssistantThread).filter(AssistantThread.user_id == user.user_id).first().thread_id
-
+        
+        record = db.query(BodyMeasurementRecord).filter(BodyMeasurementRecord.user_id == user.user_id).order_by(desc(BodyMeasurementRecord.recoded_at)).first()
         # 메시지 실행
         response = client.beta.threads.messages.create(
             thread_id=thread.id,
             role="user",
-            content=f"운동 목적 : 운동 프로그램을 만들어줘.",
-            metadata={"ID": thread_id, "운동목적": "운동 프로그램을 만들어줘."}
+            content=f"주 4회, 회당 60분 정도의 운동 프로그램을 설계해줘",
+            metadata={
+                "ID": str(thread_id),
+                "운동목적": str(user.goals),
+                "부상이력": str(user.user_body_profile.injuries),
+                "사용가능기구": str(user.user_body_profile.equipment),
+                "체지방률": str(user.user_body_profile.body_fat_percentage),
+                "골격근량": str(user.user_body_profile.body_muscle_mass),
+                "체중": str(user.user_body_profile.weight),
+                "신장": str(user.user_body_profile.height),
+                "나이": str(user.user_body_profile.user_age),
+                "길이": str(
+                    f"left_arm_length: {record.left_arm_length}, "
+                    f"right_arm_length: {record.right_arm_length}, "
+                    f"inside_leg_height: {record.inside_leg_height}, "
+                    f"shoulder_to_crotch_height: {record.shoulder_to_crotch_height}"
+                ),
+                "둘레": str(
+                    f"shoulder_breadth: {record.shoulder_breadth}, "
+                    f"head_circumference: {record.head_circumference}, "
+                    f"chest_circumference: {record.chest_circumference}, "
+                    f"waist_circumference: {record.waist_circumference}, "
+                    f"hip_circumference: {record.hip_circumference}, "
+                    f"wrist_right_circumference: {record.wrist_right_circumference}, "
+                    f"bicep_right_circumference: {record.bicep_right_circumference}, "
+                    f"forearm_right_circumference: {record.forearm_right_circumference}, "
+                    f"thigh_left_circumference: {record.thigh_left_circumference}, "
+                    f"calf_left_circumference: {record.calf_left_circumference}, "
+                    f"ankle_left_circumference: {record.ankle_left_circumference}"
+                )
+            }
         )
 
         # 메시지 실행 결과를 스트림으로 처리
@@ -174,12 +212,14 @@ async def temp_message_run(user: User = Depends(get_current_user), db: Session =
             event_handler=ExerciseDesignerHandler(db, thread.id),
         ) as stream:
             stream.until_done()
+        stream.close()
+        final_messages = stream.get_final_messages()
 
-        elapsed_times["step_2"] = (datetime.now() - start_time).total_seconds() * 1000
-
-        # 스트림에서 최종 메시지 가져오기
+        if not final_messages:
+            # 적절한 에러 처리 또는 사용자 안내
+            raise RuntimeError("스트림에서 수신된 메시지가 없습니다.")
+        
         program = json.loads(stream.get_final_messages()[0].content[0].text.value)
-        elapsed_times["step_3"] = (datetime.now() - start_time).total_seconds() * 1000
 
         new_program = TrainingProgram(
             user_id=user.user_id,
@@ -225,15 +265,10 @@ async def temp_message_run(user: User = Depends(get_current_user), db: Session =
                     db.add(new_detail)
                     db.commit()
                     db.refresh(new_detail)
-
-        elapsed_times["step_4"] = (datetime.now() - start_time).total_seconds() * 1000
-
-        # 해당 Assistant는 메인 Assistant의 Function으로 작동하므로 FunctionCall 형태로 반환
-        elapsed_times["total"] = (datetime.now() - start_time).total_seconds() * 1000
+        client.beta.threads.delete(thread_id)
         return {
             "status": "Message executed",
-            "content": json.dumps(json.loads(stream.get_final_messages()[0].content[0].text.value), indent=2, ensure_ascii=False),
-            "elapsed_times": elapsed_times
+            "content": json.dumps(json.loads(stream.get_final_messages()[0].content[0].text.value), indent=2, ensure_ascii=False)
         }
 
     except SQLAlchemyError as e:
@@ -248,3 +283,56 @@ async def temp_message_run(user: User = Depends(get_current_user), db: Session =
             "error": str(e),
             "traceback": traceback.format_exc()
             }
+# get user train program to json
+@assistant_router.get("/user_train_program")
+async def get_complete_user_train_program(
+    user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    try:
+        # Fetch the user's training program
+        # 가장 마지막에 저장된 것 조회
+        program = db.query(TrainingProgram).filter(TrainingProgram.user_id == user.user_id).order_by(desc(TrainingProgram.created_at)).first()
+        if not program:
+            raise HTTPException(status_code=404, detail="사용자의 훈련 프로그램을 찾을 수 없습니다.")
+
+        # Build the response structure
+        program_data = {
+            "training_cycle_length": program.training_cycle_length,
+            "constraints": json.loads(program.constraints),
+            "notes": program.notes,
+            "cycles": []
+        }
+
+        for cycle in program.cycles:
+            cycle_data = {
+                "day_index": cycle.day_index,
+                "exercise_type": cycle.exercise_type,
+                "sets": []
+            }
+            for ex_set in cycle.exercise_sets:
+                set_data = {
+                    "focus_area": ex_set.focus_area,
+                    "exercises": []
+                }
+                for detail in ex_set.details:
+                    detail_data = {
+                        "name": detail.name,
+                        "sets": detail.sets,
+                        "reps": detail.reps,
+                        "unit": detail.unit,
+                        "weight_type": detail.weight_type,
+                        "weight_value": detail.weight_value,
+                        "rest": detail.rest
+                    }
+                    set_data["exercises"].append(detail_data)
+                cycle_data["sets"].append(set_data)
+            program_data["cycles"].append(cycle_data)
+
+        return program_data
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"데이터베이스 오류가 발생했습니다: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"예상치 못한 오류가 발생했습니다: {str(e)}")
